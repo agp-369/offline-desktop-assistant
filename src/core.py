@@ -25,6 +25,7 @@ def speak(text):
     engine = pyttsx3.init()
     engine.say(text)
     engine.runAndWait()
+    return text
 
 def listen_offline():
     """Listens for and recognizes voice commands using VOSK."""
@@ -55,13 +56,19 @@ def listen_offline():
 def handle_offline_command(command):
     """Handles offline commands."""
     if "open notepad" in command:
-        print("Opening Notepad...")
         os.system("notepad.exe")
+        return "Opening Notepad..."
+    elif "open calculator" in command:
+        os.system("gnome-calculator")
+        return "Opening Calculator..."
+    elif "open file explorer" in command:
+        os.system("xdg-open .")
+        return "Opening File Explorer..."
     elif "what time is it" in command:
         now = datetime.datetime.now()
-        speak(f"The current time is {now.strftime('%H:%M')}")
+        return speak(f"The current time is {now.strftime('%H:%M')}")
     else:
-        print("Command not recognized.")
+        return "Command not recognized."
 
 def listen_online():
     """Listens for and recognizes voice commands using Google Speech Recognition."""
@@ -83,14 +90,22 @@ def listen_online():
 def handle_online_command(command):
     """Handles online commands."""
     if "open google" in command:
-        print("Opening Google...")
         webbrowser.open("https://www.google.com")
+        return "Opening Google..."
+    elif "search youtube for" in command:
+        query = command.replace("search youtube for", "")
+        webbrowser.open(f"https://www.youtube.com/results?search_query={query}")
+        return f"Searching YouTube for {query}..."
+    elif "search wikipedia for" in command:
+        query = command.replace("search wikipedia for", "")
+        webbrowser.open(f"https://en.wikipedia.org/wiki/{query}")
+        return f"Searching Wikipedia for {query}..."
     elif "search for" in command:
         query = command.replace("search for", "")
-        print(f"Searching for {query}...")
         webbrowser.open(f"https://www.google.com/search?q={query}")
+        return f"Searching for {query}..."
     else:
-        print("Command not recognized.")
+        return "Command not recognized."
 
 if __name__ == "__main__":
     if is_online():

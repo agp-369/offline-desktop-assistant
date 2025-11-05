@@ -2,11 +2,14 @@
 from ui.app import VoiceAssistantApp
 from src.core import is_online, listen_online, handle_online_command, listen_offline, handle_offline_command
 import threading
+import queue
 
 class MainApp(VoiceAssistantApp):
     def __init__(self):
         super().__init__()
         self.update_status()
+        self.text_queue = queue.Queue()
+        self.after(100, self.process_text_queue)
 
     def update_status(self):
         if is_online():
@@ -34,10 +37,24 @@ class MainApp(VoiceAssistantApp):
         thread.start()
 
     def handle_command(self, command, online):
+        response = ""
         if online:
-            handle_online_command(command)
+            response = handle_online_command(command)
         else:
-            handle_offline_command(command)
+            response = handle_offline_command(command)
+        self.animate_text(response)
+
+    def animate_text(self, text):
+        for char in text:
+            self.text_queue.put(char)
+
+    def process_text_queue(self):
+        try:
+            char = self.text_queue.get_nowait()
+            self.text_area.insert("end", char)
+            self.after(50, self.process_text_queue)
+        except queue.Empty:
+            self.after(100, self.process_text_queue)
 
     def reset_listen_button(self):
         self.listen_button.configure(text="Listen")
