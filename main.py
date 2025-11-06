@@ -22,6 +22,7 @@ from pathlib import Path
 import json
 from difflib import SequenceMatcher
 import mimetypes
+import queue
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -412,6 +413,7 @@ class IntentParser:
 
         # Intent patterns with priority
         patterns = [
+            ('toggle_listening', ['start listening', 'stop listening', 'continuous mode']),
             ('greeting', ['hello', 'hi', 'hey', 'good morning', 'good evening', 'good afternoon']),
             ('open_app', ['open', 'launch', 'start', 'run']),
             ('close_app', ['close', 'quit', 'exit', 'kill', 'stop', 'end']),
@@ -565,14 +567,7 @@ class AGPAssistant:
 
     def __init__(self, gui):
         self.gui = gui
-
-    def is_online(self):
-        """Checks for an active internet connection."""
-        try:
-            requests.get("https://www.google.com", timeout=3)
-            return True
-        except requests.ConnectionError:
-            return False
+        self.continuous_listening = False
 
         # Initialize core systems
         print("🚀 Initializing AGP System...")
@@ -581,6 +576,14 @@ class AGPAssistant:
         self.memory = MemoryManager()
         self.parser = IntentParser()
         self.skills = SkillRouter(self.scanner, self.process_mgr, self.memory)
+
+    def is_online(self):
+        """Checks for an active internet connection."""
+        try:
+            requests.get("https://www.google.com", timeout=3)
+            return True
+        except requests.ConnectionError:
+            return False
 
         # TTS Engine
         self.tts_engine = pyttsx3.init()
@@ -658,20 +661,20 @@ class AGPAssistant:
                                     channels=1, callback=callback):
                 self.gui.update_status("Listening (Offline)...")
                 rec = vosk.KaldiRecognizer(model, samplerate)
-                # This loop will block, so it needs to be handled carefully in a thread.
-                # For now, we'll listen for a single utterance.
-                while True:
-                    data = q.get()
-                    if rec.AcceptWaveform(data):
-                        result = json.loads(rec.Result())
-                        command = result['text']
-                        if command:
-                            return command.lower()
-                        else: # No speech detected in the audio
-                            return None
-                    # We need a way to break this loop if no speech is ever finalized.
-                    # This implementation is still naive and will block indefinitely.
-                    # A timeout mechanism would be needed for a robust solution.
+                # Listen for a maximum of 5 seconds
+                start_time = time.time()
+                while time.time() - start_time < 5:
+                    try:
+                        data = q.get_nowait()
+                        if rec.AcceptWaveform(data):
+                            result = json.loads(rec.Result())
+                            command = result['text']
+                            if command:
+                                return command.lower()
+                    except queue.Empty:
+                        time.sleep(0.1)
+                # If loop finishes without recognizing anything, return None
+                return None
         except Exception as e:
             self.gui.add_response(f"❌ Offline Recognition Error: {str(e)}")
             return None
@@ -689,7 +692,14 @@ class AGPAssistant:
         success = True
 
         try:
-            if intent == 'greeting':
+            if intent == 'toggle_listening':
+                if self.continuous_listening:
+                    self.continuous_listening = False
+                    response = "Continuous listening stopped."
+                else:
+                    self.continuous_listening = True
+                    response = "Continuous listening started."
+            elif intent == 'greeting':
                 response = "Hello! How can I assist you today?"
             elif intent == 'open_app':
                 response = self.skills.open_app(param)
@@ -727,6 +737,10 @@ class AGPAssistant:
         self.speak(response)
         self.gui.update_status("Ready")
 
+        # If continuous listening is on, start listening again
+        if self.continuous_listening and intent != 'toggle_listening':
+            self.gui.on_voice_command()
+
     def _get_help_text(self):
         return ("I can open and close applications, play music and videos, "
                 "search the web, tell you the time and date, and much more. "
@@ -741,6 +755,9 @@ class AGPInterface(ctk.CTk):
 
         self.title("AGP System - Nora")
         self.geometry("800x600")
+
+        # Always on top
+        self.attributes("-topmost", True)
 
         # Main container
         self.grid_columnconfigure(0, weight=1)
@@ -813,14 +830,32 @@ class AGPInterface(ctk.CTk):
                            args=(command,), daemon=True).start()
 
     def on_voice_command(self):
-        def listen_thread():
+        # Toggle continuous listening mode
+        if self.assistant.continuous_listening:
+            self.assistant.continuous_listening = False
+            self.update_voice_btn()
+            self.assistant.speak("Continuous listening stopped.")
+        else:
+            self.assistant.continuous_listening = True
+            self.update_voice_btn()
+            self.assistant.speak("Continuous listening started.")
+            # Start the first listen
+            threading.Thread(target=self._continuous_listen_loop, daemon=True).start()
+
+    def _continuous_listen_loop(self):
+        while self.assistant.continuous_listening:
             text = self.assistant.listen()
             if text:
-                self.assistant.process_command(text)
+                # Process command in the main thread via after()
+                self.after(0, self.assistant.process_command, text)
             else:
                 self.update_status("No speech detected")
 
-        threading.Thread(target=listen_thread, daemon=True).start()
+    def update_voice_btn(self):
+        if self.assistant.continuous_listening:
+            self.voice_btn.configure(text="Listening...", fg_color="red")
+        else:
+            self.voice_btn.configure(text="🎤 Voice", fg_color=("green", "darkgreen"))
 
 
 if __name__ == "__main__":
