@@ -16,12 +16,22 @@ class VoiceAssistantApp(ctk.CTk):
         self.text_area = ctk.CTkTextbox(self, width=480, height=200)
         self.text_area.pack(pady=10)
 
-        self.command_entry = ctk.CTkEntry(self, width=480, placeholder_text="Enter a command...")
-        self.command_entry.pack(pady=10)
+        self.input_frame = ctk.CTkFrame(self)
+        self.input_frame.pack(pady=10)
+
+        self.command_entry = ctk.CTkEntry(self.input_frame, width=380, placeholder_text="Enter a command...")
+        self.command_entry.pack(side="left", padx=(0, 10))
+
+        self.send_button = ctk.CTkButton(self.input_frame, text="Send", command=self.send_command, width=90)
+        self.send_button.pack(side="left")
 
         self.listen_button = ctk.CTkButton(self, text="Listen", command=self.listen)
         self.listen_button.pack(pady=10)
 
     def listen(self):
         # This is now handled in the MainApp class
+        pass
+
+    def send_command(self):
+        # This will be implemented in the MainApp class
         pass

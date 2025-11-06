@@ -11,6 +11,7 @@ from functools import partial
 import speech_recognition as sr
 import datetime
 import webbrowser
+import platform
 
 def is_online():
     """Checks for an active internet connection."""
@@ -25,6 +26,7 @@ def speak(text):
     engine = pyttsx3.init()
     engine.say(text)
     engine.runAndWait()
+    return text
 
 def listen_offline():
     """Listens for and recognizes voice commands using VOSK."""
@@ -52,16 +54,57 @@ def listen_offline():
                 print(f"Recognized (offline): {command}")
                 return command.lower()
 
-def handle_offline_command(command):
-    """Handles offline commands."""
-    if "open notepad" in command:
-        print("Opening Notepad...")
+# --- Offline Command Functions ---
+
+def open_notepad():
+    system = platform.system()
+    if system == "Windows":
         os.system("notepad.exe")
-    elif "what time is it" in command:
-        now = datetime.datetime.now()
-        speak(f"The current time is {now.strftime('%H:%M')}")
+    elif system == "Darwin":
+        os.system("open /System/Applications/TextEdit.app")
     else:
-        print("Command not recognized.")
+        os.system("gedit")
+    return "Opening a text editor..."
+
+def open_calculator():
+    system = platform.system()
+    if system == "Windows":
+        os.system("calc.exe")
+    elif system == "Darwin":
+        os.system("open /System/Applications/Calculator.app")
+    else:
+        os.system("gnome-calculator")
+    return "Opening Calculator..."
+
+def open_file_explorer():
+    system = platform.system()
+    if system == "Windows":
+        os.system("explorer")
+    elif system == "Darwin":
+        os.system("open .")
+    else:
+        os.system("xdg-open .")
+    return "Opening File Explorer..."
+
+def get_time():
+    now = datetime.datetime.now()
+    return speak(f"The current time is {now.strftime('%H:%M')}")
+
+# --- Command Handling ---
+
+offline_command_map = {
+    "open notepad": open_notepad,
+    "open calculator": open_calculator,
+    "open file explorer": open_file_explorer,
+    "what time is it": get_time,
+}
+
+def handle_offline_command(command):
+    """Handles offline commands by iterating through a command map."""
+    for phrase in sorted(offline_command_map.keys(), key=len, reverse=True):
+        if command.startswith(phrase):
+            return offline_command_map[phrase]()
+    return "Command not recognized."
 
 def listen_online():
     """Listens for and recognizes voice commands using Google Speech Recognition."""
@@ -80,17 +123,48 @@ def listen_online():
             print(f"Could not request results; {e}")
             return None
 
+# --- Online Command Functions ---
+
+def open_google():
+    webbrowser.open("https://www.google.com")
+    return "Opening Google..."
+
+def search_youtube(command):
+    query = command.replace("search youtube for", "").strip()
+    webbrowser.open(f"https://www.youtube.com/results?search_query={query}")
+    return f"Searching YouTube for '{query}'..."
+
+def search_wikipedia(command):
+    query = command.replace("search wikipedia for", "").strip()
+    webbrowser.open(f"https://en.wikipedia.org/wiki/{query}")
+    return f"Searching Wikipedia for '{query}'..."
+
+def search_google(command):
+    query = command.replace("search for", "").strip()
+    webbrowser.open(f"https://www.google.com/search?q={query}")
+    return f"Searching Google for '{query}'..."
+
+
+online_command_map = {
+    "open google": open_google,
+    "search youtube for": search_youtube,
+    "search wikipedia for": search_wikipedia,
+    "search for": search_google, # Must be last to avoid overriding more specific searches
+}
+
 def handle_online_command(command):
-    """Handles online commands."""
-    if "open google" in command:
-        print("Opening Google...")
-        webbrowser.open("https://www.google.com")
-    elif "search for" in command:
-        query = command.replace("search for", "")
-        print(f"Searching for {query}...")
-        webbrowser.open(f"https://www.google.com/search?q={query}")
-    else:
-        print("Command not recognized.")
+    """Handles online commands by iterating through a command map."""
+    for phrase in sorted(online_command_map.keys(), key=len, reverse=True):
+        if command.startswith(phrase):
+            func = online_command_map[phrase]
+            # Check if the function needs the command string passed to it
+            import inspect
+            sig = inspect.signature(func)
+            if len(sig.parameters) > 0:
+                return func(command)
+            else:
+                return func()
+    return "Command not recognized."
 
 if __name__ == "__main__":
     if is_online():
