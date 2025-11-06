@@ -28,6 +28,13 @@ class VoiceAssistantApp(ctk.CTk):
         self.listen_button = ctk.CTkButton(self, text="Listen", command=self.listen)
         self.listen_button.pack(pady=10)
 
+        self.settings_button = ctk.CTkButton(self, text="Settings", command=self.open_settings)
+        self.settings_button.pack(pady=10)
+
+    def open_settings(self):
+        # This will be implemented in the MainApp class
+        pass
+
     def listen(self):
         # This is now handled in the MainApp class
         pass

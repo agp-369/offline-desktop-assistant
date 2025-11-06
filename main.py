@@ -1,6 +1,7 @@
 
 from ui.app import VoiceAssistantApp
-from src.core import is_online, listen_online, handle_online_command, listen_offline, handle_offline_command
+from ui.settings import SettingsWindow
+from src.core import is_online, listen_online, handle_online_command, listen_offline, handle_offline_command, speak
 import threading
 import queue
 
@@ -68,6 +69,13 @@ class MainApp(VoiceAssistantApp):
 
     def reset_listen_button(self):
         self.listen_button.configure(text="Listen")
+
+    def open_settings(self):
+        if not hasattr(self, "settings_window") or not self.settings_window.winfo_exists():
+            self.settings_window = SettingsWindow(self)
+        self.settings_window.transient(self)
+        self.settings_window.grab_set()
+
 
     def send_command(self):
         command = self.command_entry.get()

@@ -32,27 +32,33 @@ def listen_offline():
     """Listens for and recognizes voice commands using VOSK."""
     model_path = "models/vosk-model-en-us-0.22-lgraph"
     if not os.path.exists(model_path):
-        print("Offline model not found. Please download and place it in the 'models' directory.")
+        return "Offline model not found. Please download and place it in the 'models' directory."
+
+    try:
+        model = vosk.Model(model_path)
+        samplerate = int(sd.query_devices(None, 'input')['default_samplerate'])
+        q = queue.Queue()
+
+        def callback(indata, frames, time, status):
+            if status:
+                print(status, flush=True)
+            q.put(bytes(indata))
+
+        with sd.RawInputStream(samplerate=samplerate, blocksize=8000, device=None, dtype='int16',
+                                channels=1, callback=callback):
+            print("Listening for offline commands...")
+            rec = vosk.KaldiRecognizer(model, samplerate)
+            while True:
+                data = q.get()
+                if rec.AcceptWaveform(data):
+                    result = json.loads(rec.Result())
+                    command = result['text']
+                    if command: # Only return if a command was actually recognized
+                        print(f"Recognized (offline): {command}")
+                        return command.lower()
+    except Exception as e:
+        print(f"Error during offline recognition: {e}")
         return None
-
-    model = vosk.Model(model_path)
-    samplerate = int(sd.query_devices(None, 'input')['default_samplerate'])
-    q = queue.Queue()
-
-    def callback(indata, frames, time, status):
-        q.put(bytes(indata))
-
-    with sd.RawInputStream(samplerate=samplerate, blocksize=8000, device=None, dtype='int16',
-                            channels=1, callback=callback):
-        print("Listening for offline commands...")
-        rec = vosk.KaldiRecognizer(model, samplerate)
-        while True:
-            data = q.get()
-            if rec.AcceptWaveform(data):
-                result = json.loads(rec.Result())
-                command = result['text']
-                print(f"Recognized (offline): {command}")
-                return command.lower()
 
 # --- Offline Command Functions ---
 
@@ -109,19 +115,23 @@ def handle_offline_command(command):
 def listen_online():
     """Listens for and recognizes voice commands using Google Speech Recognition."""
     r = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("Listening for online commands...")
-        audio = r.listen(source)
-        try:
+    try:
+        with sr.Microphone() as source:
+            print("Listening for online commands...")
+            r.adjust_for_ambient_noise(source) # Adjust for ambient noise
+            audio = r.listen(source)
             command = r.recognize_google(audio)
             print(f"Recognized (online): {command}")
             return command.lower()
-        except sr.UnknownValueError:
-            print("Could not understand audio.")
-            return None
-        except sr.RequestError as e:
-            print(f"Could not request results; {e}")
-            return None
+    except sr.UnknownValueError:
+        print("Google Speech Recognition could not understand audio.")
+        return None
+    except sr.RequestError as e:
+        print(f"Could not request results from Google Speech Recognition service; {e}")
+        return None
+    except Exception as e:
+        print(f"Error during online recognition: {e}")
+        return None
 
 # --- Online Command Functions ---
 
