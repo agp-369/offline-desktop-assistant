@@ -37,12 +37,22 @@ class MainApp(VoiceAssistantApp):
         thread.start()
 
     def handle_command(self, command, online):
+        self.text_area.insert("end", f"You: {command}\n")
         response = ""
         if online:
             response = handle_online_command(command)
         else:
             response = handle_offline_command(command)
-        self.animate_text(response)
+        self.animate_text(f"Assistant: {response}\n")
+        self.speak_in_thread(response)
+
+    def speak_in_thread(self, text):
+        def speak_thread():
+            speak(text)
+
+        thread = threading.Thread(target=speak_thread)
+        thread.daemon = True
+        thread.start()
 
     def animate_text(self, text):
         for char in text:
@@ -58,6 +68,25 @@ class MainApp(VoiceAssistantApp):
 
     def reset_listen_button(self):
         self.listen_button.configure(text="Listen")
+
+    def send_command(self):
+        command = self.command_entry.get()
+        if command:
+            self.command_entry.delete(0, "end")
+            self.process_text_command(command)
+
+    def process_text_command(self, command):
+        self.update_status()
+
+        def command_thread():
+            if is_online():
+                self.after(0, self.handle_command, command, True)
+            else:
+                self.after(0, self.handle_command, command, False)
+
+        thread = threading.Thread(target=command_thread)
+        thread.daemon = True
+        thread.start()
 
 if __name__ == "__main__":
     app = MainApp()
